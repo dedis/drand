@@ -30,6 +30,14 @@ jobs:
       - run: make test-integration
       - store_test_results:
           path: /tmp/test-results
+  e2e:
+    working_directory: /go/src/github.com/drand/drand
+    docker:
+      - image: circleci/golang:latest
+    steps:
+      - checkout
+      - run: go get -v -t -d ./...
+      - run: make test-e2e
   coverage:
     working_directory: /go/src/github.com/drand/drand
     docker:
@@ -42,7 +50,7 @@ jobs:
       - checkout
       - run: go get -u github.com/ory/go-acc
       - run: go get -v -t -d ./...
-      - run: go-acc ./...
+      - run: go-acc $(go list ./... | grep -v /test/e2e)
       - run: bash <(curl -s https://codecov.io/bash)
   deploy:
     docker:
@@ -74,6 +82,7 @@ workflows:
   build-deploy:
     jobs:
       - build
+      - e2e
       - coverage
       - deploy:
           requires:
