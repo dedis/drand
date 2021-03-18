@@ -65,12 +65,14 @@ func TestStoreBolt(t *testing.T) {
 		PreviousSig: sig1,
 		Round:       145,
 		Signature:   sig2,
+		SignatureV2: sig2,
 	}
 
 	b2 := &chain.Beacon{
-		PreviousSig: sig2,
+		PreviousSig: sig1,
 		Round:       146,
 		Signature:   sig1,
+		SignatureV2: sig2,
 	}
 
 	require.NoError(t, store.Put(b1))

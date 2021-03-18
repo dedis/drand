@@ -28,10 +28,12 @@ func NewMockResult(round uint64) Result {
 
 // Result is a mock result that can be used for testing.
 type Result struct {
-	Rnd  uint64
-	Rand []byte
-	Sig  []byte
-	PSig []byte
+	Rnd   uint64
+	v2rnd uint64
+	Rand  []byte
+	Sig   []byte
+	PSig  []byte
+	SigV2 []byte
 }
 
 // Randomness is a hash of the signature.
@@ -41,6 +43,9 @@ func (r *Result) Randomness() []byte {
 
 // Signature is the signature of the randomness for this round.
 func (r *Result) Signature() []byte {
+	if r.Rnd >= r.v2rnd {
+		return r.SigV2
+	}
 	return r.Sig
 }
 
@@ -80,8 +85,17 @@ func roundToBytes(r int) []byte {
 	return buff.Bytes()
 }
 
+func getSig(s *share.PriShare, msg []byte) []byte {
+	tsig, err := key.Scheme.Sign(s, msg)
+	if err != nil {
+		panic(err)
+	}
+	tshare := tbls.SigShare(tsig)
+	return tshare.Value()
+}
+
 // VerifiableResults creates a set of results that will pass a `chain.Verify` check.
-func VerifiableResults(count int) (*chain.Info, []Result) {
+func VerifiableResults(count int, v2Epoch uint64) (*chain.Info, []Result) {
 	secret := key.KeyGroup.Scalar().Pick(random.New())
 	public := key.KeyGroup.Point().Mul(secret, nil)
 	previous := make([]byte, 32)
@@ -91,23 +105,21 @@ func VerifiableResults(count int) (*chain.Info, []Result) {
 
 	out := make([]Result, count)
 	for i := range out {
-		msg := sha256Hash(append(previous[:], roundToBytes(i+1)...))
-		sshare := share.PriShare{I: 0, V: secret}
-		tsig, err := key.Scheme.Sign(&sshare, msg)
-		if err != nil {
-			panic(err)
-		}
-		tshare := tbls.SigShare(tsig)
-		sig := tshare.Value()
-
+		msg1 := chain.Message(uint64(i+1), previous[:])
+		msg2 := chain.MessageV2(uint64(i + 1))
+		sshare := &share.PriShare{I: 0, V: secret}
+		sig1 := getSig(sshare, msg1)
+		sig2 := getSig(sshare, msg2)
 		out[i] = Result{
-			Sig:  sig,
-			PSig: previous,
-			Rnd:  uint64(i + 1),
-			Rand: chain.RandomnessFromSignature(sig),
+			v2rnd: v2Epoch,
+			Sig:   sig1,
+			SigV2: sig2,
+			PSig:  previous,
+			Rnd:   uint64(i + 1),
+			Rand:  chain.RandomnessFromSignature(sig1),
 		}
-		previous = make([]byte, len(sig))
-		copy(previous[:], sig)
+		previous = make([]byte, len(sig1))
+		copy(previous[:], sig1)
 	}
 	info := chain.Info{
 		PublicKey:   public,

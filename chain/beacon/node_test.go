@@ -452,6 +452,8 @@ func TestBeaconSimple(t *testing.T) {
 	myCallBack := func(b *chain.Beacon) {
 		// verify partial sig
 		require.NoError(t, chain.VerifyBeacon(bt.dpublic, b))
+		// verify signature V2
+		require.NoError(t, chain.VerifyBeaconV2(bt.dpublic, b))
 		counter.Done()
 	}
 

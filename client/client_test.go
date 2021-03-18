@@ -80,7 +80,8 @@ func TestClientCache(t *testing.T) {
 	defer cancel()
 
 	c, e := client.New(client.From(http.ForURLs([]string{"http://" + addr1}, chainInfo.Hash())...),
-		client.WithChainHash(chainInfo.Hash()), client.WithCacheSize(1))
+		client.WithChainHash(chainInfo.Hash()), client.WithCacheSize(1),
+	)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -125,7 +126,7 @@ func TestClientWithoutCache(t *testing.T) {
 }
 
 func TestClientWithWatcher(t *testing.T) {
-	info, results := mock.VerifiableResults(2)
+	info, results := mock.VerifiableResults(2, 10)
 
 	ch := make(chan client.Result, len(results))
 	for i := range results {
@@ -238,7 +239,7 @@ func TestClientAutoWatch(t *testing.T) {
 }
 
 func TestClientAutoWatchRetry(t *testing.T) {
-	info, results := mock.VerifiableResults(5)
+	info, results := mock.VerifiableResults(5, 0)
 	resC := make(chan client.Result)
 	defer close(resC)
 
