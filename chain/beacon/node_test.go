@@ -46,7 +46,8 @@ func (t *testBeaconServer) SyncChain(req *drand.SyncRequest, p drand.Protocol_Sy
 	if t.disable {
 		return errors.New("disabled server")
 	}
-	return t.h.chain.sync.SyncChain(req, p)
+	SyncChain(t.h.l, t.h.chain, req, p)
+	return nil
 }
 
 func dkgShares(n, t int) ([]*key.Share, []kyber.Point) {
@@ -437,6 +438,7 @@ func TestBeaconSync(t *testing.T) {
 	fmt.Printf("\n\n --- Before DOING ROUND AFTER ENABLING -- \n\n")
 	doRound(n+n-online, period)
 }
+
 func TestBeaconSimple(t *testing.T) {
 	n := 3
 	thr := n/2 + 1

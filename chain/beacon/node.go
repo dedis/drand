@@ -137,7 +137,7 @@ func (h *Handler) ProcessPartialBeacon(c context.Context, p *proto.PartialBeacon
 }
 
 // Store returns the store associated with this beacon handler
-func (h *Handler) Store() chain.Store {
+func (h *Handler) Store() CallbackStore {
 	return h.chain
 }
 
@@ -167,7 +167,7 @@ func (h *Handler) Start() error {
 func (h *Handler) Catchup() {
 	nRound, tTime := chain.NextRound(h.conf.Clock.Now().Unix(), h.conf.Group.Period, h.conf.Group.GenesisTime)
 	go h.run(tTime)
-	h.chain.RunSync(context.Background(), nRound, nil)
+	h.chain.RunSync(nRound, nil)
 }
 
 // Transition makes this beacon continuously sync until the time written in the
@@ -185,7 +185,7 @@ func (h *Handler) Transition(prevGroup *key.Group) error {
 	go h.run(targetTime)
 	// we run the sync up until (inclusive) one round before the transition
 	h.l.Debug("new_node", "following chain", "to_round", tRound-1)
-	h.chain.RunSync(context.Background(), tRound-1, toPeers(prevGroup.Nodes))
+	h.chain.RunSync(tRound-1, toPeers(prevGroup.Nodes))
 	return nil
 }
 
@@ -238,7 +238,7 @@ func (h *Handler) run(startTime int64) {
 				// XXX find a way to start the catchup as soon as the runsync is
 				// done. Not critical but leads to faster network recovery.
 				h.l.Debug("beacon_loop", "run_sync_catchup", "last_is", lastBeacon, "should_be", current.round)
-				go h.chain.RunSync(context.Background(), current.round, nil)
+				h.chain.RunSync(current.round, nil)
 			}
 		case b := <-h.chain.AppendedBeaconNoSync():
 			if b.Round < current.round {
@@ -345,11 +345,6 @@ func (h *Handler) AddCallback(id string, fn func(*chain.Beacon)) {
 // RemoveCallback is a proxy method to remove a callback on the backend store
 func (h *Handler) RemoveCallback(id string) {
 	h.chain.RemoveCallback(id)
-}
-
-// SyncChain is a proxy method to sync a chain
-func (h *Handler) SyncChain(req *proto.SyncRequest, stream proto.Protocol_SyncChainServer) error {
-	return h.chain.sync.SyncChain(req, stream)
 }
 
 func shortSigStr(sig []byte) string {

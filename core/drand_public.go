@@ -72,54 +72,42 @@ func (d *Drand) PublicRand(c context.Context, in *drand.PublicRandRequest) (*dra
 	return beaconToProto(r), nil
 }
 
+// a proxy type so public streaming request can use the same logic as in priate
+// / protocol syncing request, even though the types differ, so it prevents
+// changing the protobuf structs.
+type proxyRequest struct {
+	*drand.PublicRandRequest
+}
+
+func (p *proxyRequest) GetFromRound() uint64 {
+	return p.PublicRandRequest.GetRound()
+}
+
+type proxyStream struct {
+	drand.Public_PublicRandStreamServer
+}
+
+func (p *proxyStream) Send(b *drand.BeaconPacket) error {
+	return p.Public_PublicRandStreamServer.Send(&drand.PublicRandResponse{
+		Round:             b.Round,
+		Signature:         b.Signature,
+		PreviousSignature: b.PreviousSig,
+		Randomness:        chain.RandomnessFromSignature(b.Signature),
+	})
+}
+
 // PublicRandStream exports a stream of new beacons as they are generated over gRPC
 func (d *Drand) PublicRandStream(req *drand.PublicRandRequest, stream drand.Public_PublicRandStreamServer) error {
-	var b *beacon.Handler
 	d.state.Lock()
 	if d.beacon == nil {
 		d.state.Unlock()
 		return errors.New("beacon has not started on this node yet")
 	}
-	b = d.beacon
+	store := d.beacon.Store()
 	d.state.Unlock()
-	lastb, err := b.Store().Last()
-	if err != nil {
-		return err
-	}
-	addr := net.RemoteAddress(stream.Context())
-	done := make(chan error, 1)
-	d.log.Debug("request", "stream", "from", addr, "round", req.GetRound())
-	if req.GetRound() != 0 && req.GetRound() <= lastb.Round {
-		// we need to stream from store first
-		var err error
-		b.Store().Cursor(func(c chain.Cursor) {
-			for bb := c.Seek(req.GetRound()); bb != nil; bb = c.Next() {
-				if err = stream.Send(beaconToProto(bb)); err != nil {
-					d.log.Debug("stream", err)
-					return
-				}
-			}
-		})
-		if err != nil {
-			return err
-		}
-	}
-	// then we can stream from any new rounds
-	// register a callback for the duration of this stream
-	d.beacon.AddCallback(addr, func(b *chain.Beacon) {
-		err := stream.Send(&drand.PublicRandResponse{
-			Round:             b.Round,
-			Signature:         b.Signature,
-			PreviousSignature: b.PreviousSig,
-			Randomness:        b.Randomness(),
-		})
-		// if connection has a problem, we drop the callback
-		if err != nil {
-			d.beacon.RemoveCallback(addr)
-			done <- err
-		}
-	})
-	return <-done
+	proxyReq := &proxyRequest{req}
+	proxyStr := &proxyStream{stream}
+	return beacon.SyncChain(d.log, store, proxyReq, proxyStr)
 }
 
 // PrivateRand returns an ECIES encrypted random blob of 32 bytes from /dev/urandom
@@ -203,7 +191,7 @@ func (d *Drand) SyncChain(req *drand.SyncRequest, stream drand.Protocol_SyncChai
 	b := d.beacon
 	d.state.Unlock()
 	if b != nil {
-		return b.SyncChain(req, stream)
+		return beacon.SyncChain(d.log, d.beacon.Store(), req, stream)
 	}
 	return nil
 }

@@ -444,6 +444,7 @@ func TestDrandPublicStream(t *testing.T) {
 	client := net.NewGrpcClientFromCertManager(cm)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	// get last round first
 	resp, err := client.PublicRand(ctx, rootID, new(drand.PublicRandRequest))
 	require.NoError(t, err)
@@ -452,6 +453,7 @@ func TestDrandPublicStream(t *testing.T) {
 	req := &drand.PublicRandRequest{Round: resp.GetRound()}
 	respCh, err := client.PublicRandStream(ctx, root.drand.priv.Public, req)
 	require.NoError(t, err)
+
 	// expect first round now since node already has it
 	select {
 	case beacon := <-respCh:
@@ -515,7 +517,6 @@ func TestDrandFollowChain(tt *testing.T) {
 	require.NoError(tt, err)
 
 	// TEST setup a new node and fetch history
-
 	newNode := dt.SetupNewNodes(1)[0]
 	newClient, err := net.NewControlClient(newNode.drand.opts.controlPort)
 	require.NoError(tt, err)
@@ -528,13 +529,13 @@ func TestDrandFollowChain(tt *testing.T) {
 	select {
 	case <-errCh:
 	case <-time.After(100 * time.Millisecond):
-		tt.Fatal("should have errored")
+		require.True(tt, false, "should have errored")
 	}
 	_, errCh, _ = newClient.StartFollowChain(ctx, "tutu", addrToFollow, tls, 10000)
 	select {
 	case <-errCh:
 	case <-time.After(100 * time.Millisecond):
-		tt.Fatal("should have errored")
+		require.True(tt, false, "should have errored")
 	}
 
 	fn := func(upTo, exp uint64) {
@@ -556,13 +557,12 @@ func TestDrandFollowChain(tt *testing.T) {
 					break
 				}
 				require.NoError(tt, e)
-			case <-time.After(1 * time.Second):
-				tt.FailNow()
+			case <-time.After(2 * time.Second):
+				require.True(tt, false, " OUTTIME")
 			}
 		}
 		// cancel the operation
 		cancel()
-
 		// check if the beacon is in the database
 		store, err := newNode.drand.createBoltStore()
 		require.NoError(tt, err)
@@ -608,7 +608,7 @@ func TestDrandPublicStreamProxy(t *testing.T) {
 	if !ok {
 		t.Fatal("expected beacon")
 	}
-	require.Equal(t, beacon.Round(), resp.Round()+1)
+	require.Equal(t, resp.Round()+1, beacon.Round())
 	nTry := 4
 	// we expect the next one now
 	initRound := resp.Round() + 2

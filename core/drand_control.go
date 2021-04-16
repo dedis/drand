@@ -844,24 +844,21 @@ func (d *Drand) StartFollowChain(req *drand.StartFollowRequest, stream drand.Con
 	// register callback to notify client of progress
 	cbStore := beacon.NewCallbackStore(store)
 	defer cbStore.Close()
-	syncer := beacon.NewSyncer(d.log, cbStore, info, d.privGateway)
 	cb, done := sendProgressCallback(stream, req.GetUpTo(), info, d.opts.clock, d.log)
 	cbStore.AddCallback(addr, cb)
 	defer cbStore.RemoveCallback(addr)
-	if err := syncer.Follow(ctx, req.GetUpTo(), peers); err != nil {
-		d.log.Error("start_follow_chain", "syncer_stopped", "err", err, "leaving_sync")
-		return err
-	}
+	syncer := beacon.NewSyncManager(d.log, cbStore, info, d.privGateway, d.opts.clock)
+	go syncer.Run()
+	defer syncer.Stop()
+	syncer.RequestSync(peers, req.GetUpTo())
+
 	// wait for all the callbacks to be called and progress sent before returning
-	if req.GetUpTo() > 0 {
-		select {
-		case <-done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return ctx.Err()
 }
 
 // chainInfoFromPeers attempts to fetch chain info from one of the passed peers.

@@ -214,7 +214,7 @@ func (g *grpcClient) PartialBeacon(ctx context.Context, p Peer, in *drand.Partia
 }
 
 // MaxSyncBuffer is the maximum number of queued rounds when syncing
-const MaxSyncBuffer = 100
+const MaxSyncBuffer = 500
 
 func (g *grpcClient) SyncChain(ctx context.Context, p Peer, in *drand.SyncRequest, opts ...CallOption) (chan *drand.BeaconPacket, error) {
 	resp := make(chan *drand.BeaconPacket, MaxSyncBuffer)
@@ -243,7 +243,7 @@ func (g *grpcClient) SyncChain(ctx context.Context, p Peer, in *drand.SyncReques
 			}
 			select {
 			case <-ctx.Done():
-				log.DefaultLogger().Info("grpc client", "chain sync", "error", "context done", "to", p.Address())
+				log.DefaultLogger().Info("grpc client", "chain sync", "error", "context", ctx.Err(), "to", p.Address())
 				fmt.Println(" --- STREAM CONTEXT DONE")
 				return
 			default:
